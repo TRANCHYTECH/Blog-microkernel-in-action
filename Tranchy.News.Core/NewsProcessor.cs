@@ -32,13 +32,14 @@ public class NewsProcessor: BackgroundService
     private void ProcessData(CancellationToken stoppingToken)
     {
         var queue = new BlockingCollection<NewsData>();
-
-        Parallel.For(1, MAX_HANDLERS_NUMBER + 1, (i) =>
-        {
-            _logger.LogInformation($"Start handling from task #{i}");
-            HandleNewsInQueue(queue);
-            _logger.LogInformation($"Finish handling from task #{i}");
-        });
+        var tasks = Enumerable.Range(0, MAX_HANDLERS_NUMBER)
+            .Select((i) => Task.Run(() =>
+            {
+                _logger.LogInformation($"Start handling from task #{i}");
+                HandleNewsInQueue(queue);
+                _logger.LogInformation($"Finish handling from task #{i}");
+            }, stoppingToken))
+            .ToArray();
 
         Parallel.ForEach(_plugins, (plugin) =>
         {
@@ -54,6 +55,8 @@ public class NewsProcessor: BackgroundService
         });
         
         queue.CompleteAdding();
+
+        Task.WaitAll(tasks);
     }
 
     private void HandleNewsInQueue(BlockingCollection<NewsData> newsQueue)
